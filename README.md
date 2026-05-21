@@ -132,7 +132,3 @@ const val STATS_HISTORY_DAYS = 60                          // Stats-Aufbewahrung
 ## Lizenz
 
 MIT — siehe [LICENSE](LICENSE).
-
----
-
-*Privat-Projekt; PRs willkommen, aber keine Garantien.*
