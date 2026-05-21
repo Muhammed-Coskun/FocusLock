@@ -1,5 +1,7 @@
 package com.personal.focuslock.service
 
+import android.app.AlarmManager
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -53,16 +55,73 @@ class BlockerService : Service() {
         tracker = ForegroundTracker(usm)
         ensureChannel()
         startForegroundCompat()
+        scheduleWatchdog()
         scope.launch { loop() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        scheduleWatchdog()
         return START_STICKY
     }
 
+    /**
+     * Called when the user swipes the app away from the recents tray. Default behavior would
+     * leave the service running but the OS becomes more likely to reap it, so we proactively
+     * schedule a short-delay restart via AlarmManager.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        scheduleRestart(delayMs = 500L)
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        // The service is going down (Samsung "Stop", low memory, etc.) — re-arm an alarm
+        // that will bring it back unless the user force-stopped the whole app process.
+        scheduleRestart(delayMs = 2_000L)
         scope.cancel()
         super.onDestroy()
+    }
+
+    /**
+     * Schedules a one-shot foreground service start in [delayMs]. Survives our own death
+     * because the AlarmManager queue is per-package, not per-process. (A real force-stop
+     * via Settings → Apps wipes the queue and the user has to open the app again.)
+     */
+    private fun scheduleRestart(delayMs: Long) {
+        val am = getSystemService(AlarmManager::class.java) ?: return
+        val pending = restartPendingIntent() ?: return
+        am.set(
+            AlarmManager.ELAPSED_REALTIME,
+            SystemClock.elapsedRealtime() + delayMs,
+            pending
+        )
+    }
+
+    /**
+     * Periodic inexact alarm (~every 10 min) that ensures the service comes back up if
+     * Doze, the OOM killer, or Samsung's Active-Apps stop removed it. Inexact = no special
+     * permission needed on API 31+.
+     */
+    private fun scheduleWatchdog() {
+        val am = getSystemService(AlarmManager::class.java) ?: return
+        val pending = restartPendingIntent() ?: return
+        am.setInexactRepeating(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            SystemClock.elapsedRealtime() + WATCHDOG_INTERVAL_MS,
+            WATCHDOG_INTERVAL_MS,
+            pending
+        )
+    }
+
+    private fun restartPendingIntent(): PendingIntent? {
+        val intent = Intent(this, BlockerService::class.java)
+        // FLAG_IMMUTABLE required on API 31+. UPDATE_CURRENT replaces any existing pending intent.
+        return PendingIntent.getForegroundService(
+            this,
+            RESTART_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
     }
 
     private suspend fun loop() {
@@ -222,12 +281,20 @@ class BlockerService : Service() {
     private fun ensureChannel() {
         val nm = getSystemService(NotificationManager::class.java)
         val existing = nm.getNotificationChannel(Constants.NOTIFICATION_CHANNEL_ID)
-        if (existing == null) {
+        // Recreate the channel if it exists with the wrong importance (upgrade from older builds).
+        if (existing != null && existing.importance != NotificationManager.IMPORTANCE_MIN) {
+            nm.deleteNotificationChannel(Constants.NOTIFICATION_CHANNEL_ID)
+        }
+        if (existing == null || existing.importance != NotificationManager.IMPORTANCE_MIN) {
             val channel = NotificationChannel(
                 Constants.NOTIFICATION_CHANNEL_ID,
                 getString(R.string.notif_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply { description = getString(R.string.notif_channel_desc) }
+                NotificationManager.IMPORTANCE_MIN // sinks the notification to the bottom of the shade
+            ).apply {
+                description = getString(R.string.notif_channel_desc)
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_SECRET
+            }
             nm.createNotificationChannel(channel)
         }
     }
@@ -244,7 +311,12 @@ class BlockerService : Service() {
             .setContentText(getString(R.string.notif_text))
             .setOngoing(true)
             .setContentIntent(openApp)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            // PRIORITY_MIN + VISIBILITY_SECRET + no badge = as invisible as Android allows
+            // for a foreground service notification (which must, by policy, exist).
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setShowWhen(false)
+            .setSilent(true)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(Constants.NOTIFICATION_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -254,6 +326,9 @@ class BlockerService : Service() {
     }
 
     companion object {
+        private const val RESTART_REQUEST_CODE = 9001
+        private const val WATCHDOG_INTERVAL_MS = 10L * 60 * 1000  // 10 minutes
+
         fun start(context: Context) {
             val intent = Intent(context, BlockerService::class.java)
             context.startForegroundService(intent)

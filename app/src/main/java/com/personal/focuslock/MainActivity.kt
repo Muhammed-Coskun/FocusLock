@@ -130,6 +130,7 @@ private fun PermissionBanner() {
     var usage by remember { mutableStateOf(Permissions.hasUsageAccess(ctx)) }
     var overlay by remember { mutableStateOf(Permissions.hasOverlay(ctx)) }
     var accessibility by remember { mutableStateOf(Permissions.isAccessibilityServiceEnabled(ctx)) }
+    var batteryOpt by remember { mutableStateOf(Permissions.isIgnoringBatteryOptimizations(ctx)) }
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
@@ -138,13 +139,14 @@ private fun PermissionBanner() {
                 usage = Permissions.hasUsageAccess(ctx)
                 overlay = Permissions.hasOverlay(ctx)
                 accessibility = Permissions.isAccessibilityServiceEnabled(ctx)
+                batteryOpt = Permissions.isIgnoringBatteryOptimizations(ctx)
             }
         }
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs) }
     }
 
-    if (usage && overlay && accessibility) return
+    if (usage && overlay && accessibility && batteryOpt) return
 
     Column(
         modifier = Modifier
@@ -162,7 +164,7 @@ private fun PermissionBanner() {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            "Damit FocusLock Apps und Webseiten tracken und sperren kann:",
+            "Damit FocusLock zuverlässig im Hintergrund läuft:",
             color = TextSecondary,
             fontSize = 13.sp
         )
@@ -188,6 +190,16 @@ private fun PermissionBanner() {
                 "Browser-URL erkennen, um z. B. twitter.com zu sperren"
             ) {
                 Permissions.openAccessibilitySettings(ctx)
+            }
+            first = false
+        }
+        if (!batteryOpt) {
+            if (!first) Spacer(Modifier.height(8.dp))
+            PermRow(
+                "Akku-Optimierung deaktivieren",
+                "Verhindert, dass Samsung den Service im Hintergrund stoppt"
+            ) {
+                Permissions.requestIgnoreBatteryOptimizations(ctx)
             }
         }
     }
