@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">FocusLock</string>
+    <string name="notif_channel_name">Usage Monitor</string>
+    <string name="notif_channel_desc">Keeps FocusLock running to enforce app limits.</string>
+    <string name="notif_title">FocusLock running</string>
+    <string name="notif_text">Monitoring usage of selected apps.</string>
+    <string name="accessibility_summary">Liest die URL-Leiste in Browsern, um Webseiten wie twitter.com nach Limit zu sperren.</string>
+    <string name="accessibility_description">FocusLock erkennt anhand der URL-Leiste in Chrome/Firefox/Samsung Internet usw., wenn eine überwachte Webseite geöffnet ist, und wendet das gleiche 15/2 h-Sperrmuster an. Es werden keine URLs gespeichert oder weitergegeben.</string>
+</resources>

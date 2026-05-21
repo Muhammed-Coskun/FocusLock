@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# IntelliJ / Android Studio
+*.iml
+.idea/
+.kotlin/
+
+# Local config
+local.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor & tooling
+.claude/
+*.log
+
+# Keystores (NEVER commit signing keys)
+*.jks
+*.keystore
+keystore.properties
+
+# Build artifacts
+*.apk
+*.aab
