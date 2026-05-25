@@ -1,42 +1,40 @@
 # FocusLock
 
-Selbst auferlegter App- und Webseiten-Blocker für Android, designed für Samsung One UI 8.
+Android app/website blocker with a fixed usage cycle.
 
-## Idee
+## How it works
 
-Schluss mit Doomscrolling, ohne sich die App komplett zu verbieten. FocusLock folgt einem festen Rhythmus:
+> **15 minutes of use → 2 hours locked → 15 minutes → …**
 
-> **15 Minuten Nutzung → 2 Stunden gesperrt → 15 Minuten frei → …**
+Every monitored app and every monitored website follows the same cycle. When the counter hits 15 min, a full-screen lock activity opens over the target and you get bounced to the home screen until the 2 h are up. Solving the emergency puzzle resets the cycle early.
 
-Jede überwachte App und jede überwachte Webseite läuft nach diesem Muster. Erreicht der Zähler 15 min, blendet sich ein Vollbild-Sperrscreen über die Ziel-App und zwingt dich zurück auf den Homescreen. Erst nach Ablauf der 2 h öffnet sich der Zugriff für die nächsten 15 min — oder du löst die Notfall-Entsperrung.
+## Features
 
-## Was es kann
+- App blocking via `UsageStatsManager`.
+- Website blocking in Chrome, Firefox, Samsung Internet, Edge, Brave, Opera, DuckDuckGo and Vivaldi — an `AccessibilityService` reads the URL bar so the same cycle applies to e.g. `twitter.com`.
+- Shared-timer groups: multiple entries (Insta app + `instagram.com` + `twitter.com`) can share one 15/2 h budget. Group membership is frozen while a block is active.
+- Emergency unlock: 60-character random-string transcription puzzle. `FLAG_SECURE` blocks Circle to Search and screenshots, paste menu disabled, keyboard suggestions off, bulk-input rejected.
+- 12-of-15 min warning toast.
+- Stats: streak counter, daily totals, 7-day chart, per-app breakdown, 60 days of history.
 
-- **Apps** sperren (Instagram, TikTok, …) via `UsageStatsManager`.
-- **Webseiten** im Browser sperren (Chrome, Firefox, Samsung Internet, Edge, Brave, Opera, DuckDuckGo, Vivaldi). Damit lässt sich der Trick „Insta gesperrt → schnell `twitter.com` in Chrome" nicht mehr nutzen.
-- **Geteilter Timer:** Mehrere Einträge (z. B. Insta-App + `instagram.com` + `twitter.com`) lassen sich zu einer Gruppe verbinden, die sich ein gemeinsames 15/2-h-Budget teilt. Während einer aktiven Sperre ist die Mitgliedschaft eingefroren.
-- **Notfall-Entsperrung:** ein bewusst nerviger 60-Zeichen-Transkriptions-Puzzle. `FLAG_SECURE`, kein Paste, keine Tastatur-Vorschläge — damit Circle to Search, Lens & Friends nicht reinpfuschen.
-- **Vorwarnung** als Toast bei Minute 12 von 15.
-- **Statistik:** Streak (Tage ohne Notfall-Entsperrung), 7-Tage-Chart, Tageswerte pro App, 60 Tage Historie.
+## Implementation notes
 
-## Wie das technisch zusammenhängt
+- Foreground service polls every second, ticks `usedMs` on the matching `AppState` or shared `MonitorGroup`.
+- Browser host detection runs in an in-memory `StateFlow` — nothing about your browsing is persisted or sent anywhere.
+- `SystemClock.elapsedRealtime()` for delta math, immune to wall-clock jumps (NTP, DST, midnight rollover).
+- Service self-restarts via `onTaskRemoved` + a 10-minute inexact AlarmManager watchdog to survive Doze and Samsung's background-kill behavior.
+- Persistence via `androidx.datastore` (JSON). No network calls, no telemetry.
 
-- Ein **Foreground Service** pollt jede Sekunde den Vordergrund-Prozess.
-- In bekannten Browsern liest ein **Accessibility Service** die URL-Leiste aus und meldet den Host an einen In-Memory-Bus — keine URL verlässt jemals das Gerät.
-- Pro Tick wird `usedMs` des passenden Containers (Solo-`AppState` oder gemeinsame `MonitorGroup`) erhöht. Bei 15 min → `blockUntilMs = jetzt + 2 h`. Ab dann fängt jeder erneute Aufruf den `BlockOverlayActivity` ab.
-- Sperr-Zähler nutzt `SystemClock.elapsedRealtime()` — immun gegen Wall-Clock-Sprünge (Mitternacht, NTP, DST).
-- Persistenz in `androidx.datastore` als JSON, keine Cloud, kein Logging, keine Network-Calls.
+Source under [`app/src/main/java/com/personal/focuslock/`](app/src/main/java/com/personal/focuslock/).
 
-Mehr Details direkt im Code unter [`app/src/main/java/com/personal/focuslock/`](app/src/main/java/com/personal/focuslock/).
-
-## Bauen
+## Build
 
 ```bash
 ./gradlew :app:assembleDebug
 ```
 
-Voraussetzungen: JDK 17, Android SDK mit `compileSdk 35`. APK landet unter `app/build/outputs/apk/debug/`.
+Requires JDK 17 and Android SDK with `compileSdk 35`.
 
-## Lizenz
+## License
 
-MIT — siehe [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
